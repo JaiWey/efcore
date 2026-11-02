@@ -1727,4 +1727,67 @@ public abstract class AdHocNavigationsQueryTestBase(NonSharedFixture fixture)
     }
 
     #endregion
+
+    #region 31380
+
+    [Theory, MemberData(nameof(IsAsyncData))]
+    public virtual async Task AutoInclude_with_unidirectional_many_to_many(bool async)
+    {
+        var contextFactory = await InitializeNonSharedTest<Context31380>(seed: c => c.SeedAsync());
+        using var context = contextFactory.CreateDbContext();
+
+        var query = context.Libraries.OrderBy(x => x.Id).First();
+
+        Assert.Equal(3, query.Books.Count());
+    }
+
+    protected class Context31380(DbContextOptions options) : DbContext(options)
+    {
+        public DbSet<Book31380> Books { get; set; } = null!;
+        public DbSet<Library31380> Libraries { get; set; } = null!;
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Library31380>().Navigation(x => x.Books).AutoInclude();
+            modelBuilder.Entity<Library31380>().HasMany(x => x.Books)
+                //.WithMany(x => x.Libraries);
+            .WithMany();
+        }
+
+        public Task SeedAsync()
+        {
+            var books = new List<Book31380>
+            {
+                new() { Name = "Book1"},
+                new() { Name = "Book2"},
+                new() { Name = "Book3"},
+            };
+            AddRange(books);
+
+            Add(new Library31380{ Name = "Library1", Books = books});
+            return SaveChangesAsync();
+        }
+
+
+        public class Library31380
+        {
+            public int Id { get; set; }
+
+            public string Name { get; set; } = null!;
+
+            public List<Book31380> Books { get; set; } = new();
+        }
+
+        public class Book31380
+        {
+            public int Id { get; set; }
+
+            public string Name { get; set; } = null!;
+
+           // public List<Library31380> Libraries { get; set; } = new();
+        }
+    }
+
+    #endregion
+
 }

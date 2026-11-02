@@ -263,15 +263,24 @@ public class CollectionNavigationBuilder : IInfrastructure<IConventionForeignKey
 
         using (foreignKey.DeclaringEntityType.Model.DelayConventions())
         {
+            var navigation = foreignKey.PrincipalToDependent;
+            var eagerLoadedConfigurationSource = (navigation as IConventionNavigation)?.GetIsEagerLoadedConfigurationSource();
+            var isEagerLoaded = (navigation as INavigation)?.IsEagerLoaded;
             foreignKey.DeclaringEntityType.Builder.HasNoRelationship(foreignKey, ConfigurationSource.Explicit);
             Builder = null;
-            return ((EntityType)DeclaringEntityType).Builder.HasSkipNavigation(
+            var skipNavigationBuilder = ((EntityType)DeclaringEntityType).Builder.HasSkipNavigation(
                 navigationMember,
                 (EntityType)RelatedEntityType,
                 foreignKey.PrincipalToDependent?.ClrType,
                 ConfigurationSource.Explicit,
                 collection: true,
-                onDependent: false)!.Metadata;
+                onDependent: false)!;
+            if (eagerLoadedConfigurationSource.HasValue)
+            {
+                skipNavigationBuilder.AutoInclude(isEagerLoaded, eagerLoadedConfigurationSource.Value);
+            }
+
+            return skipNavigationBuilder.Metadata;
         }
     }
 
@@ -308,6 +317,8 @@ public class CollectionNavigationBuilder : IInfrastructure<IConventionForeignKey
             {
                 var conflictingNavigation = RelatedEntityType.FindNavigation(navigationName) as IConventionNavigation;
                 var foreignKey = (ForeignKey?)conflictingNavigation?.ForeignKey;
+                var eagerLoadedConfigurationSource = conflictingNavigation?.GetIsEagerLoadedConfigurationSource();
+                var isEagerLoaded = conflictingNavigation?.IsEagerLoaded;
                 if (conflictingNavigation?.GetConfigurationSource() == ConfigurationSource.Explicit)
                 {
                     InternalForeignKeyBuilder.ThrowForConflictingNavigation(
@@ -320,12 +331,20 @@ public class CollectionNavigationBuilder : IInfrastructure<IConventionForeignKey
                 }
                 else
                 {
-                    var skipNavigation = RelatedEntityType.FindSkipNavigation(navigationName);
-                    if (skipNavigation != null)
+
+                    var skipNavigationBuilder = ((EntityType)RelatedEntityType).Builder.HasSkipNavigation(
+                        navigationMember,
+                        (EntityType)DeclaringEntityType,
+                        ConfigurationSource.Explicit,
+                        collection: true,
+                        onDependent: false)!;
+
+                    if (eagerLoadedConfigurationSource.HasValue)
                     {
-                        ((SkipNavigation)skipNavigation).UpdateConfigurationSource(ConfigurationSource.Explicit);
-                        return skipNavigation;
+                        skipNavigationBuilder.AutoInclude(isEagerLoaded, eagerLoadedConfigurationSource.Value);
                     }
+
+                    return skipNavigationBuilder.Metadata;
                 }
             }
 
